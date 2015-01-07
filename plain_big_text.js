@@ -34,7 +34,7 @@ function Command(){
 		return r_value;
 	}
 
-	command.execute = function (contents){
+	command.apply = function (contents){
 		function replace_string(src, dst, begin, end){
 			return src.substring(0,begin) + dst + src.substring(end);
 		}
@@ -177,45 +177,42 @@ function NewContext(context){
 	}
 
 
-	context.execute_command = function(command, site){
+	context.execute_command = function(raw_command, sender_site){
 		var i;
-		var command_next = Command.decode(command);
-		if (! command_next){
+		var command = Command.decode(raw_command);
+		if (! command){
 			//todo print something
 			return;
 		}
-		command_next.sender = site;
+		command.sender = sender_site;
 		var local_state = context.local_site.state;
 
-		if (command_next.revision > local_state.command_log.length){
+		if (command.revision > local_state.command_log.length){
 			site.reset();
 			return;
 		}
 
-		lift(site.state.command_log, command_next, site.direction=="up");
+		lift(sender_site.state.command_log, command, sender_site.is_slave);
 
 		//update lifter
 		for (var idx in context.neighbors){
 			var neighbor = context.neighbors[idx];
-			neighbor.state.command_log.push(command_next.clone());
+			neighbor.state.command_log.push(command.clone());
 		}
 
-		command_next.execute(local_state.contents);
+		local_state.contents = command.apply(local_state.contents);
 		context.did_replace_text(
-				command_next.begin, command_next.end, 
-				command_next.diff)
-		//update GUI here
-		context.did_replace_text(command.begin, command.end, command.diff);
+				command.begin, command.end, command.diff)
 
 		//Update last known neighbor site state revision to 
 		//use it when send command.
-		site.revision+=1;
+		sender_site.revision+=1;
 
 		for (var idx in context.neighbors){
 			var neighbor = context.neighbors[idx];
-			//if (neighbor.diriction == "down")
-				//continue;
-			var command_to_send = command_next.clone();
+			if (! neighbor.is_slave)
+				continue;
+			var command_to_send = command.clone();
 			command_to_send.revision = neighbor.state.revision;
 			neighbor.send(command_to_send.encode());
 		}
@@ -225,12 +222,13 @@ function NewContext(context){
 		//Overrideen by subclasses.
 	}
 	context.request_replace_text = function(begin, end, diff){
-		var command = Command;
+		var command = Command();
 		command.begin = begin;
 		command.end = end;
 		command.diff = diff;
 
-		command.execute(local_state.contents);
+		var local_state = context.local_site.state;
+		local_state.contents = command.apply(local_state.contents);
 		context.did_replace_text(begin, end, diff);
 
 		for (var idx in context.neighbors){
