@@ -54,7 +54,18 @@ Command.decode = function(data_block){
 	command.end   = dataview.getUint16(2);
 	command.revision = dataview.getUint16(4);
 
-	var diff_dataview = new DataView(data_block, 6);
+	//This isn't warking at server side....
+	//var diff_dataview = data_block.slice(6, data_block.byteLength);
+
+	//But this works fine.
+	var diff_dataview = new ArrayBuffer(data_block.byteLength-6);
+	{
+		var src = new Uint8Array(data_block, 6);
+		var dst = new Uint8Array(diff_dataview);
+		for (var i = 0; i<dst.length; i++)
+			dst[i] = src[i];
+	}
+
 	var text_decoder = new TextDecoder('utf8');
 	command.diff = text_decoder.decode(diff_dataview);
 
