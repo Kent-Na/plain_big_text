@@ -1,6 +1,7 @@
 
 function Command(){
 	var command = {};
+	command.is_echo_back = false;
 	command.begin = 0;
 	command.end = 0;
 	command.diff = "";
@@ -9,6 +10,7 @@ function Command(){
 
 	command.clone = function(){
 		var cloned = Command();
+		cloned.is_echo_back= command.is_echo_back;
 		cloned.begin = command.begin;
 		cloned.end= command.end;
 		cloned.diff= command.diff;
@@ -22,13 +24,17 @@ function Command(){
 		var encoded_diff = text_encoder.encode(command.diff);
 
 		var r_value = new ArrayBuffer(6+encoded_diff.length);
-		var r_view = new DataView(r_value)
-		r_view.setUint16(0, command.begin);
-		r_view.setUint16(2, command.end);
-		r_view.setUint16(4, command.revision);
+		var r_view = new DataView(r_value);
+		var op_code = 0x00;
+		if (command.is_echo_back)
+			op_code += 0x80;
+		r_view.setUint8(0, op_code);
+		r_view.setUint16(1, command.begin);
+		r_view.setUint16(3, command.end);
+		r_view.setUint16(5, command.revision);
 
 		for (var i = 0; i<encoded_diff.length; i++){
-			r_view.setUint8(6+i, encoded_diff[i]);
+			r_view.setUint8(7+i, encoded_diff[i]);
 		}
 
 		return r_value;
@@ -47,20 +53,22 @@ function Command(){
 
 Command.decode = function(data_block){
 	var command = Command();
-	if (data_block.byteLength < 6)
+	if (data_block.byteLength < 7)
 		return null;
 	var dataview = new DataView(data_block);
-	command.begin = dataview.getUint16(0);
-	command.end   = dataview.getUint16(2);
-	command.revision = dataview.getUint16(4);
+	var op_code = dataview.getUint8(0);
+	command.is_echo_back = ((op_code & 0x80)!=0x00);
+	command.begin = dataview.getUint16(1);
+	command.end   = dataview.getUint16(3);
+	command.revision = dataview.getUint16(5);
 
 	//This isn't warking at server side....
 	//var diff_dataview = data_block.slice(6, data_block.byteLength);
 
 	//But this works fine.
-	var diff_dataview = new ArrayBuffer(data_block.byteLength-6);
+	var diff_dataview = new ArrayBuffer(data_block.byteLength-7);
 	{
-		var src = new Uint8Array(data_block, 6);
+		var src = new Uint8Array(data_block, 7);
 		var dst = new Uint8Array(diff_dataview);
 		for (var i = 0; i<dst.length; i++)
 			dst[i] = src[i];
@@ -211,9 +219,11 @@ function NewContext(context){
 			neighbor.state.command_log.push(command.clone());
 		}
 
-		local_state.contents = command.apply(local_state.contents);
-		context.did_replace_text(
-				command.begin, command.end, command.diff)
+		if ( ! command.is_echo_back){
+			local_state.contents = command.apply(local_state.contents);
+			context.did_replace_text(
+					command.begin, command.end, command.diff)
+		}
 
 		//Update last known neighbor site state revision to 
 		//use it when send command.
@@ -225,6 +235,7 @@ function NewContext(context){
 				continue;
 			var command_to_send = command.clone();
 			command_to_send.revision = neighbor.state.revision;
+			command_to_send.is_echo_back = (neighbor == sender_site);
 			neighbor.send(command_to_send.encode());
 		}
 	}
