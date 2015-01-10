@@ -2,6 +2,7 @@
 function Command(){
 	var command = {};
 	command.is_echo_back = false;
+	command.is_sync = false
 	command.begin = 0;
 	command.end = 0;
 	command.diff = "";
@@ -11,6 +12,7 @@ function Command(){
 	command.clone = function(){
 		var cloned = Command();
 		cloned.is_echo_back= command.is_echo_back;
+		cloned.is_sync= command.is_sync;
 		cloned.begin = command.begin;
 		cloned.end= command.end;
 		cloned.diff= command.diff;
@@ -23,7 +25,7 @@ function Command(){
 		var text_encoder = new TextEncoder("utf8");
 		var encoded_diff = text_encoder.encode(command.diff);
 
-		var r_value = new ArrayBuffer(6+encoded_diff.length);
+		var r_value = new ArrayBuffer(7+encoded_diff.length);
 		var r_view = new DataView(r_value);
 		var op_code = 0x00;
 		if (command.is_echo_back)
@@ -40,12 +42,22 @@ function Command(){
 		return r_value;
 	}
 
-	command.apply = function (contents){
+	command.apply = function(contents){
 		function replace_string(src, dst, begin, end){
 			return src.substring(0,begin) + dst + src.substring(end);
 		}
 		return replace_string(
 				contents, command.diff, command.begin, command.end);
+	}
+
+	command.is_valid = function(contents){
+		var len = contents.length;
+		if (begin > len)
+			return false;
+		if (end > len)
+			return false;
+		if (begin > end)
+			return false;
 	}
 
 	return command;
@@ -180,19 +192,31 @@ function NewContext(context){
 	function State(){
 		var state = {};
 		state.command_log = [];
+		state.log_offset = 0;
 		return state;
 	}
 
-	context.LocalState = function(){
-		var state = State();
-		state.contents = "";
-		return state;
+	//context.LocalState = function(){
+		//var state = State();
+		//state.contents = "";
+		//return state;
+	//}
+
+	//context.NeighborState = function(){
+		//var state = State();
+		//state.revision = 0;
+		//return state;
+	//}
+
+	context.on_init_local_site = function(site){
+		site.state = State();
+		site.state.contents = "";
 	}
 
-	context.NeighborState = function(){
-		var state = State();
-		state.revision = 0;
-		return state;
+	context.on_init_neighbor_site = function(site){
+		site.state = State();
+		site.state.revision = 0;
+		//todo: sync
 	}
 
 
@@ -231,8 +255,6 @@ function NewContext(context){
 
 		for (var idx in context.neighbors){
 			var neighbor = context.neighbors[idx];
-			if (! neighbor.is_slave)
-				continue;
 			var command_to_send = command.clone();
 			command_to_send.revision = neighbor.state.revision;
 			command_to_send.is_echo_back = (neighbor == sender_site);
