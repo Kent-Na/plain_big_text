@@ -1,7 +1,6 @@
 
 function Command(){
 	var command = {};
-	command.is_sync = false
 	command.begin = 0;
 	command.end = 0;
 	command.diff = "";
@@ -10,7 +9,6 @@ function Command(){
 
 	command.clone = function(){
 		var cloned = Command();
-		cloned.is_sync= command.is_sync;
 		cloned.begin = command.begin;
 		cloned.end= command.end;
 		cloned.diff= command.diff;
@@ -197,6 +195,12 @@ function NewContext(context){
 
 	context.on_init_neighbor_site = function(site){
 		site.state = State();
+		if (! site.is_slave){
+			var command = Command();
+			command.diff = context.local_site.state.contents;
+			site.send(command.encode());
+			site.state.command_log.push(command.clone());
+		}
 	}
 
 
@@ -207,6 +211,7 @@ function NewContext(context){
 			//todo print something
 			return;
 		}
+
 		command.sender = sender_site;
 		var local_state = context.local_site.state;
 
@@ -269,18 +274,6 @@ function NewContext(context){
 		command.diff = diff;
 
 		context.execute_command(command.encode(), context.local_site);
-
-		//var local_state = context.local_site.state;
-		//local_state.contents = command.apply(local_state.contents);
-		//context.did_replace_text(begin, end, diff);
-//
-		//for (var idx in context.neighbors){
-			//var neighbor = context.neighbors[idx];
-//
-			//var command_to_send = command.clone();
-			//command_to_send.revision = neighbor.state.revision;
-			//neighbor.send(command_to_send.encode());
-		//}
 	}
 	return context;
 }
