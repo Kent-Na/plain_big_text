@@ -1,7 +1,6 @@
 
 function Command(){
 	var command = {};
-	command.is_echo_back = false;
 	command.is_sync = false
 	command.begin = 0;
 	command.end = 0;
@@ -11,7 +10,6 @@ function Command(){
 
 	command.clone = function(){
 		var cloned = Command();
-		cloned.is_echo_back= command.is_echo_back;
 		cloned.is_sync= command.is_sync;
 		cloned.begin = command.begin;
 		cloned.end= command.end;
@@ -28,8 +26,6 @@ function Command(){
 		var r_value = new ArrayBuffer(7+encoded_diff.length);
 		var r_view = new DataView(r_value);
 		var op_code = 0x00;
-		if (command.is_echo_back)
-			op_code += 0x80;
 		r_view.setUint8(0, op_code);
 		r_view.setUint16(1, command.begin);
 		r_view.setUint16(3, command.end);
@@ -69,7 +65,6 @@ Command.decode = function(data_block){
 		return null;
 	var dataview = new DataView(data_block);
 	var op_code = dataview.getUint8(0);
-	command.is_echo_back = ((op_code & 0x80)!=0x00);
 	command.begin = dataview.getUint16(1);
 	command.end   = dataview.getUint16(3);
 	command.revision = dataview.getUint16(5);
@@ -146,7 +141,6 @@ function apply_transform(
 		var base = begin_0 + command_0.diff.length;
 		command_1.begin = base;
 		command_1.end = base+(end_1-end_0);
-			//printf("c4\n");
 	}
 	else if (begin_1 <= begin_0 && begin_0 <= end_1 && end_1 <= end_0){
 		//     0|----------|
@@ -178,8 +172,7 @@ function apply_transform(
 function lift(command_log, command, is_prioritized){
 	for (i = command.revision; i<command_log.length; i++){
 		var cmd = command_log[i]
-			//server.client[id].lifter[i];
-		if (cmd.sender_id == command.sender_id)
+		if (cmd.sender == command.sender)
 			continue;
 
 		var clone = command.clone();
@@ -193,20 +186,9 @@ function NewContext(context){
 		var state = {};
 		state.command_log = [];
 		state.log_offset = 0;
+		state.revision = 0;
 		return state;
 	}
-
-	//context.LocalState = function(){
-		//var state = State();
-		//state.contents = "";
-		//return state;
-	//}
-
-	//context.NeighborState = function(){
-		//var state = State();
-		//state.revision = 0;
-		//return state;
-	//}
 
 	context.on_init_local_site = function(site){
 		site.state = State();
@@ -215,8 +197,6 @@ function NewContext(context){
 
 	context.on_init_neighbor_site = function(site){
 		site.state = State();
-		site.state.revision = 0;
-		//todo: sync
 	}
 
 
@@ -230,36 +210,53 @@ function NewContext(context){
 		command.sender = sender_site;
 		var local_state = context.local_site.state;
 
-		if (command.revision > local_state.command_log.length){
+		if (command.revision > sender_site.state.command_log.length){
 			site.reset();
 			return;
 		}
 
-		lift(sender_site.state.command_log, command, sender_site.is_slave);
+		if (sender_site != context.local_site){
+			lift(sender_site.state.command_log, 
+					command, sender_site.is_slave);
+		}
 
 		//update lifter
 		for (var idx in context.neighbors){
 			var neighbor = context.neighbors[idx];
+			if (neighbor == sender_site)
+				continue;
+			var cloned = command.clone();
 			neighbor.state.command_log.push(command.clone());
 		}
 
-		if ( ! command.is_echo_back){
-			local_state.contents = command.apply(local_state.contents);
-			context.did_replace_text(
-					command.begin, command.end, command.diff)
-		}
+		local_state.contents = command.apply(local_state.contents);
+		context.did_replace_text(
+				command.begin, command.end, command.diff)
 
 		//Update last known neighbor site state revision to 
 		//use it when send command.
-		sender_site.revision+=1;
+		sender_site.state.revision+=1;
 
 		for (var idx in context.neighbors){
 			var neighbor = context.neighbors[idx];
+			if (neighbor == sender_site){
+				continue;
+			}
 			var command_to_send = command.clone();
 			command_to_send.revision = neighbor.state.revision;
-			command_to_send.is_echo_back = (neighbor == sender_site);
 			neighbor.send(command_to_send.encode());
 		}
+	}
+
+	//For automatic test.
+	context.do_random_action = function(){
+		var len = context.local_site.state.contents.length;
+		var c_table = 
+			"abcdefghijklmnopqrstuvwxyz"
+			"ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+		var idx = Math.floor(Math.random()*len);
+		var c_idx = Math.floor(Math.random()*c_table.length);
+		context.request_replace_text(idx, idx, c_table[c_idx]);
 	}
 
 	context.did_replace_text = function(begin, end, diff){
@@ -271,17 +268,19 @@ function NewContext(context){
 		command.end = end;
 		command.diff = diff;
 
-		var local_state = context.local_site.state;
-		local_state.contents = command.apply(local_state.contents);
-		context.did_replace_text(begin, end, diff);
+		context.execute_command(command.encode(), context.local_site);
 
-		for (var idx in context.neighbors){
-			var neighbor = context.neighbors[idx];
-
-			var command_to_send = command.clone();
-			command_to_send.revision = neighbor.state.revision;
-			neighbor.send(command_to_send.encode());
-		}
+		//var local_state = context.local_site.state;
+		//local_state.contents = command.apply(local_state.contents);
+		//context.did_replace_text(begin, end, diff);
+//
+		//for (var idx in context.neighbors){
+			//var neighbor = context.neighbors[idx];
+//
+			//var command_to_send = command.clone();
+			//command_to_send.revision = neighbor.state.revision;
+			//neighbor.send(command_to_send.encode());
+		//}
 	}
 	return context;
 }
