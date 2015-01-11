@@ -195,7 +195,7 @@ function NewContext(context){
 
 	context.on_init_neighbor_site = function(site){
 		site.state = State();
-		if (! site.is_slave){
+		if (site.is_slave){
 			var command = Command();
 			command.diff = context.local_site.state.contents;
 			site.send(command.encode());
