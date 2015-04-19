@@ -1,19 +1,16 @@
 
 function Command(){
-	var command = {};
+	var command = JSOTC.Command();
 	command.begin = 0;
 	command.end = 0;
 	command.diff = "";
-	command.revision = 0;
-	command.sender = null;
 
+	base_clone = command.clone;
 	command.clone = function(){
-		var cloned = Command();
+		var cloned = base_clone();
 		cloned.begin = command.begin;
 		cloned.end= command.end;
 		cloned.diff= command.diff;
-		cloned.revision = command.revision;
-		cloned.sender = command.sender;
 		return cloned;
 	}
 
@@ -57,6 +54,21 @@ function Command(){
 	return command;
 }
 
+Command.random = function(contents){
+	var len = contents.length;
+	var c_table = 
+		"abcdefghijklmnopqrstuvwxyz"
+		"ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+	var idx = Math.floor(Math.random()*len);
+	var c_idx = Math.floor(Math.random()*c_table.length);
+
+	var command = Command();
+	command.begin = idx;
+	command.end = idx;
+	command.diff = c_table[c_idx];
+
+	return command;
+}
 Command.decode = function(data_block){
 	var command = Command();
 	if (data_block.byteLength < 7)
@@ -95,7 +107,7 @@ Command.decode = function(data_block){
 //This parametor will affect order of inserted text at 
 //exactory same location
 
-function apply_transform(
+Command.apply_transform = function(
 		command_0, 
 		command_1, 
 		is_prioritied){
@@ -167,115 +179,29 @@ function apply_transform(
 	}
 }
 
-function lift(command_log, command, is_prioritized){
-	for (i = command.revision; i<command_log.length; i++){
-		var cmd = command_log[i]
-		if (cmd.sender == command.sender)
-			continue;
-
-		var clone = command.clone();
-		apply_transform(command_log[i], command, !is_prioritized);
-		apply_transform(clone, command_log[i], is_prioritized);
-	}
-}
-
 function NewContext(context){
-	function State(){
-		var state = {};
-		state.command_log = [];
-		state.log_offset = 0;
-		state.revision = 0;
-		return state;
+	context.initial_contents = function(){
+		return "";
+	}
+	context.did_execute_command = function(command){
+		context.did_replace_text(command.begin, command.end, command.diff);
 	}
 
-	context.on_init_local_site = function(site){
-		site.state = State();
-		site.state.contents = "";
-	}
+	JSOTC.NewContextWithCommandClass(context, Command);
 
-	context.on_init_neighbor_site = function(site){
-		site.state = State();
-		if (site.is_slave){
-			var command = Command();
-			command.diff = context.local_site.state.contents;
-			site.send(command.encode());
-			site.state.command_log.push(command.clone());
-		}
-	}
-
-
-	context.execute_command = function(raw_command, sender_site){
-		var i;
-		var command = Command.decode(raw_command);
-		if (! command){
-			//todo print something
-			return;
-		}
-
-		command.sender = sender_site;
-		var local_state = context.local_site.state;
-
-		if (command.revision > sender_site.state.command_log.length){
-			site.reset();
-			return;
-		}
-
-		if (sender_site != context.local_site){
-			lift(sender_site.state.command_log, 
-					command, sender_site.is_slave);
-		}
-
-		//update lifter
-		for (var idx in context.neighbors){
-			var neighbor = context.neighbors[idx];
-			if (neighbor == sender_site)
-				continue;
-			var cloned = command.clone();
-			neighbor.state.command_log.push(command.clone());
-		}
-
-		local_state.contents = command.apply(local_state.contents);
-		context.did_replace_text(
-				command.begin, command.end, command.diff)
-
-		//Update last known neighbor site state revision to 
-		//use it when send command.
-		sender_site.state.revision+=1;
-
-		for (var idx in context.neighbors){
-			var neighbor = context.neighbors[idx];
-			if (neighbor == sender_site){
-				continue;
-			}
-			var command_to_send = command.clone();
-			command_to_send.revision = neighbor.state.revision;
-			neighbor.send(command_to_send.encode());
-		}
-	}
-
-	//For automatic test.
-	context.do_random_action = function(){
-		var len = context.local_site.state.contents.length;
-		var c_table = 
-			"abcdefghijklmnopqrstuvwxyz"
-			"ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-		var idx = Math.floor(Math.random()*len);
-		var c_idx = Math.floor(Math.random()*c_table.length);
-		context.request_replace_text(idx, idx, c_table[c_idx]);
-	}
-
-	context.did_replace_text = function(begin, end, diff){
-		//Overrideen by subclasses.
-	}
 	context.request_replace_text = function(begin, end, diff){
 		var command = Command();
 		command.begin = begin;
 		command.end = end;
 		command.diff = diff;
 
-		context.execute_command(command.encode(), context.local_site);
+		context.request_execute_command(command);
 	}
-	return context;
-}
 
+	context.did_replace_text = function(begin, end, diff){
+		//Overrideen by subclasses.
+	}
+
+	return context;	
+}
 
