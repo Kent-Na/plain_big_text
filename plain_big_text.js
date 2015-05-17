@@ -5,7 +5,7 @@ function Command(){
 	command.end = 0;
 	command.diff = "";
 
-	base_clone = command.clone;
+	var base_clone = command.clone;
 	command.clone = function(){
 		var cloned = base_clone();
 		cloned.begin = command.begin;

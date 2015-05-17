@@ -1,6 +1,89 @@
 
 JSOTC = function(){
 
+var memcpy_ArrayBuffer = function(
+		from_value, from_offset, byte_size, 
+		to_value, to_offset){
+	var from_view = new DataView(from_value);
+	var to_view = new DtataView(to_value);
+
+	var i;
+	for (i = 0; i<byte_size; i++){
+		to_view.setUint8(to_offset+i, from_view.getUint8(from_offset+i));
+	}
+}
+
+var concat_ArrayBuffer = function(l_value, r_value){
+	var out = new ArrayBuffer(l_value.byteLength+r_value.byteLength);
+	memcpy_ArrayBuffer(l_value, 0, l_value.byteLength, out, 0);
+	memcpy_ArrayBuffer(r_value, 0, r_value.byteLength, 
+			out, l_value.byteLength);
+	return out;
+}
+
+var encode_string = function(str){
+	var text_encoder = new TextEncoder("utf8");
+	var encoded_str = text_encoder.encode(str);
+	
+	var str_len = encoded_str.byteLength;
+	var h_len;
+	if (str_len < 0xfe)
+		h_len = 1;
+	else if (l < 0x10000)
+		h_len = 3;
+	else
+		h_len = 9;
+
+	var out = new ArrayBuffer(h_len + str_len);
+	var out_view = new DataView(out);
+	
+	if (str_len < 0xfe)
+		out_view.setUint8(0, str_len);
+	else if (l < 0x10000){
+		out_view.setUint8(0, 0xFE);
+		out_view.setUint16(1, str_len, false);
+	}
+	else{
+		out_view.setUint8(0, 0xFF);
+		out_view.setUint32(1, 0, false);
+		out_view.setUint32(5, str_len, false);
+	}
+
+	memcpy_ArrayBuffer(encoded_str, 0, encode_string.byteLength, 
+			out, h_len);
+
+	return out;
+}
+
+var decode_string = function(buffer, offset){
+	var r_value = {};
+
+	var data_view = new DataView(out, offset);
+
+	//Get length of string
+	var length = data_view.getUint8(0);
+	var ptr = 1;
+	if (length == 0xFE){
+		length = data_view.getUint16(1);
+		ptr += 2;
+	}
+	else if (length == 0xFF){
+		length = data_view.getUint32(5);
+		ptr += 8;
+	}
+
+	//Decode string.
+	var string_array_buffer = new ArrayBuffer(length);
+	memcpy_ArrayBuffer(data_view, ptr, length,
+			string_array_buffer, 0);
+	var text_decoder = new TextDecoder('utf8');
+
+	//Setup return value;
+	r_value.string = text_decoder.decode(string_array_buffer);
+	r_value.end = offset + ptr + length;
+	return r_value;
+}
+
 Command = function(){
 	//Constructor.
 	//Return new command whitch does noting.
