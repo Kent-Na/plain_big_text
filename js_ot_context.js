@@ -5,10 +5,11 @@ var memcpy_ArrayBuffer = function(
 		from_value, from_offset, byte_size, 
 		to_value, to_offset){
 	var from_view = new DataView(from_value);
-	var to_view = new DtataView(to_value);
+	var to_view = new DataView(to_value);
 
 	var i;
 	for (i = 0; i<byte_size; i++){
+		from_view.getUint8(from_offset+i);
 		to_view.setUint8(to_offset+i, from_view.getUint8(from_offset+i));
 	}
 }
@@ -29,7 +30,7 @@ var encode_string = function(str){
 	var h_len;
 	if (str_len < 0xfe)
 		h_len = 1;
-	else if (l < 0x10000)
+	else if (str_len < 0x10000)
 		h_len = 3;
 	else
 		h_len = 9;
@@ -39,7 +40,7 @@ var encode_string = function(str){
 	
 	if (str_len < 0xfe)
 		out_view.setUint8(0, str_len);
-	else if (l < 0x10000){
+	else if (str_len < 0x10000){
 		out_view.setUint8(0, 0xFE);
 		out_view.setUint16(1, str_len, false);
 	}
@@ -49,7 +50,7 @@ var encode_string = function(str){
 		out_view.setUint32(5, str_len, false);
 	}
 
-	memcpy_ArrayBuffer(encoded_str, 0, encode_string.byteLength, 
+	memcpy_ArrayBuffer(encoded_str.buffer, 0, encoded_str.byteLength, 
 			out, h_len);
 
 	return out;
@@ -58,23 +59,23 @@ var encode_string = function(str){
 var decode_string = function(buffer, offset){
 	var r_value = {};
 
-	var data_view = new DataView(out, offset);
+	var data_view = new DataView(buffer, offset);
 
 	//Get length of string
 	var length = data_view.getUint8(0);
 	var ptr = 1;
 	if (length == 0xFE){
-		length = data_view.getUint16(1);
+		length = data_view.getUint16(1, false);
 		ptr += 2;
 	}
 	else if (length == 0xFF){
-		length = data_view.getUint32(5);
+		length = data_view.getUint32(5, false);
 		ptr += 8;
 	}
 
 	//Decode string.
 	var string_array_buffer = new ArrayBuffer(length);
-	memcpy_ArrayBuffer(data_view, ptr, length,
+	memcpy_ArrayBuffer(buffer, offset+ptr, length,
 			string_array_buffer, 0);
 	var text_decoder = new TextDecoder('utf8');
 
@@ -280,6 +281,10 @@ var that = {};
 that.Command = Command;
 that.NewContextWithCommandClass = NewContextWithCommandClass;
 that.NewContext = NewContext;
+
+that.encode_string = encode_string;
+that.decode_string = decode_string;
+that.memcpy_ArrayBuffer = memcpy_ArrayBuffer;
 
 return that;
 

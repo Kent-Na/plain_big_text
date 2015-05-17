@@ -145,7 +145,7 @@ function op_set(state, path, value){
 	}
 
 	var stack = TypeUtil.path_to_stack(state.root, path);
-	var event_stack = state.root_event.path_to_stack(path);
+	//var event_stack = state.root_event.path_to_stack(path);
 	var container = stack[stack.length - 2];
 	//var event_container = event_stack[stack.length - 2];
 	var key = path[path.length -1];
@@ -313,6 +313,7 @@ function Command(){
 	var base_clone = command.clone;
 	command.clone = function(){
 		var cloned = base_clone();
+		cloned.type = command.type;
 		cloned.path = command.path;
 		cloned.value = command.value;
 		cloned.begin = command.begin;
@@ -329,6 +330,7 @@ function Command(){
 
 		var total_length  = 0;
 		total_length += 1;//op_code
+		total_length += 2;//revision
 
 		if (is_op_splice){
 			total_length += 4;//begin and end field both take 2 byte.
@@ -347,8 +349,8 @@ function Command(){
 		var encoded_value
 
 		if (is_op_set || is_op_splice){
-			json_value = JSON.stringify(command.path);
-			encoded_value = JSOTC.encode_string(json_path);
+			json_value = JSON.stringify(command.value);
+			encoded_value = JSOTC.encode_string(json_value);
 			total_length += encoded_value.byteLength;
 		}
 
@@ -358,6 +360,8 @@ function Command(){
 		var ptr = 0;
 		r_view.setUint8(ptr, opcode_offset + command.type);
 		ptr += 1;
+		r_view.setUint16(ptr, command.revision, false);
+		ptr += 2;
 
 		if (is_op_splice){
 			r_view.setUint16(ptr, command.begin, false);
@@ -367,14 +371,14 @@ function Command(){
 		}
 
 		if (is_op_set || is_op_delete || is_op_splice){
-			JSONTC.memcpy_ArrayBuffer(
-					encoded_path, 0, encoded_diff.byteLength,
+			JSOTC.memcpy_ArrayBuffer(
+					encoded_path, 0, encoded_path.byteLength,
 					r_value, ptr);
 			ptr += encoded_path.byteLength;
 		}
 
 		if (is_op_set || is_op_splice){
-			JSONTC.memcpy_ArrayBuffer(
+			JSOTC.memcpy_ArrayBuffer(
 					encoded_value, 0, encoded_value.byteLength,
 					r_value, ptr);
 			ptr += encoded_value.byteLength;
@@ -500,7 +504,7 @@ Command.random = function(contents){
 	if (path.length == 0 && root == null){
 		command.type = CommandType.Set;
 		command.path = path;
-		command.value = create_json_fragment(5);
+		command.value = create_json_fragment(3);
 		return command;
 	}
 
@@ -540,7 +544,7 @@ Command.random = function(contents){
 		else if (TypeUtil.is_array(target)){
 			var rnd_2 = Math.floor(Math.random()*10+10);
 			command.value = create_random_array(
-					Math.max(0, 4-path.length), insert_count);
+					Math.max(0, 3-path.length), insert_count);
 		}
 		return command;
 	}
@@ -548,7 +552,7 @@ Command.random = function(contents){
 		command.type = CommandType.Splice;
 		command.path = path;
 		command.value = create_json_fragment(
-				Math.max(0, 4-path.length));
+				Math.max(0, 3-path.length));
 		return command;
 	}
 	else{
@@ -567,25 +571,28 @@ Command.decode = function(data_block){
 	ptr += 1;
 	command.type = op_code - opcode_offset;
 
+	command.revision = dataview.getUint16(ptr, false);
+	ptr += 2;
+
 	var is_op_set = command.type == CommandType.Set;
 	var is_op_delete = command.type == CommandType.Delete;
 	var is_op_splice = command.type == CommandType.Splice;
 
 	if (is_op_splice){
-		command.begin = dataview.getUint16(ptr);
+		command.begin = dataview.getUint16(ptr, false);
 		ptr += 2;
-		command.end= dataview.getUint16(ptr);
+		command.end= dataview.getUint16(ptr, false);
 		ptr += 2;
 	}
 
 	if (is_op_set || is_op_delete || is_op_splice){
 		var result = JSOTC.decode_string(data_block, ptr);
-		command.path = result.string;
+		command.path = JSON.parse(result.string);
 		ptr = result.end;
 	}
 	if (is_op_set || is_op_splice){
 		var result = JSOTC.decode_string(data_block, ptr);
-		command.value = result.string;
+		command.value = JSON.parse(result.string);
 		ptr = result.end;
 	}
 
@@ -606,6 +613,7 @@ Command.apply_transform = function(
 		command_0, 
 		command_1, 
 		is_prioritied){
+		
 	if (command_0.type == CommandType.Noop){
 		return;//Nothing required.
 	}
@@ -820,7 +828,7 @@ Command.apply_splice_transform = function(
 
 function NewContext(context){
 	context.initial_contents = function(){
-		return "";
+		return State();
 	}
 	context.did_execute_command = function(command){
 		context.did_replace_text(command.begin, command.end, command.diff);
@@ -843,7 +851,7 @@ function NewContext(context){
 
 	return context;	
 }
-
+/*
 function test(){
 	var state = State();
 	op_set(state, [], {});
@@ -862,7 +870,7 @@ function test(){
 
 	op_splice(state, ["c"], 0, 0, ["test"]);
 	op_splice(state, ["c", 0], 0, 0, "test2+");
-	console.log(state);
+	//console.log(state);
 
 	state = State();
 
@@ -871,10 +879,11 @@ function test(){
 		var command = Command.random(state);
 		state = command.apply(state);
 	}
-	console.log(state);
+	//console.log(state);
 }
 test();
 
+*/
 //test sequence
 
 //set null {}
