@@ -53,7 +53,12 @@ function Command(){
 
 	return command;
 }
+Command.clone_state = function(contents){
+	var command = Command();
+	command.diff = contents;
 
+	return command;
+}
 Command.random = function(contents){
 	var len = contents.length;
 	var c_table = 

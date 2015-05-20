@@ -169,8 +169,8 @@ function NewContextWithCommandClass(context, command_class){
 	context.on_init_neighbor_site = function(site){
 		site.state = State();
 		if (site.is_slave){
-			var command = Command();
-			command.diff = context.local_site.state.contents;
+			var state = context.local_state.state.contents;
+			var command = Command.clone_state(state);
 			site.send(command.encode());
 			site.state.command_log.push(command.clone());
 		}
@@ -221,8 +221,7 @@ function NewContextWithCommandClass(context, command_class){
 		}
 
 		local_state.contents = command.apply(local_state.contents);
-		context.did_replace_text(
-				command.begin, command.end, command.diff)
+		context.did_execute_command(command);
 
 		//Update last known neighbor site state revision to 
 		//use it when send command.

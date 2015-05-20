@@ -414,6 +414,15 @@ function Command(){
 	return command;
 }
 
+Command.clone_state = function(contents){
+	var command = Command();
+	command.type = CommandType.Set;
+	command.path = [];
+	command.value = contents;
+
+	return command;
+}
+
 Command.random = function(contents){
 	function create_random_string(length){
 		//fixme: support multi-byte charctor.
@@ -808,9 +817,10 @@ Command.apply_splice_transform = function(
 	else if (begin_0 < begin_1 && end_1 < end_0){
 		// 0|----------|
 		//    1|----|
-		command_1.diff = "";
-		command_1.begin = 0;
-		command_1.end = 0;
+		command_1.type = CommandType.Noop;
+		//command_1.diff = "";
+		//command_1.begin = 0;
+		//command_1.end = 0;
 	}
 	else if (begin_1 < begin_0 && end_0 < end_1){
 		//    0|----|
@@ -831,22 +841,35 @@ function NewContext(context){
 		return State();
 	}
 	context.did_execute_command = function(command){
-		context.did_replace_text(command.begin, command.end, command.diff);
+
 	}
 
 	JSOTC.NewContextWithCommandClass(context, Command);
 
-	context.request_replace_text = function(begin, end, diff){
+	context.request_set = function(path, value){
 		var command = Command();
-		command.begin = begin;
-		command.end = end;
-		command.diff = diff;
+		command.type = CommandType.Set;
+		command.path = path;
+		command.value = value;
 
 		context.request_execute_command(command);
 	}
+	context.request_delete = function(path){
+		var command = Command();
+		command.type = CommandType.Delete;
+		command.path = path;
 
-	context.did_replace_text = function(begin, end, diff){
-		//Overrideen by subclasses.
+		context.request_execute_command(command);
+	}
+	context.request_splice = function(path, value, begin, end){
+		var command = Command();
+		command.type = CommandType.Delete;
+		command.path = path;
+		command.value = value;
+		command.begin = begin;
+		command.end = end;
+
+		context.request_execute_command(command);
 	}
 
 	return context;	
