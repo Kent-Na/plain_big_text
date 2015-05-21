@@ -218,16 +218,10 @@ function op_delete(state, path){
 }
 
 function op_splice(state, path, begin, end, values){
-	if (path.length == 0){
-		//Invalid path
-		return;
-	}
-
 	var stack = TypeUtil.path_to_stack(state.root, path);
 	var event_stack = state.root_event.path_to_stack(path);
-	//var container = stack[stack.length - 2];
 	var old_value = stack[stack.length - 1];
-	//var event_container = event_stack[stack.length - 2];
+
 	if (old_value == null){
 		//Invalid path.
 		return;
@@ -418,7 +412,7 @@ Command.clone_state = function(contents){
 	var command = Command();
 	command.type = CommandType.Set;
 	command.path = [];
-	command.value = contents;
+	command.value = contents.root;
 
 	return command;
 }
@@ -863,7 +857,7 @@ function NewContext(context){
 	}
 	context.request_splice = function(path, value, begin, end){
 		var command = Command();
-		command.type = CommandType.Delete;
+		command.type = CommandType.Splice;
 		command.path = path;
 		command.value = value;
 		command.begin = begin;

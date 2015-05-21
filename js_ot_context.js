@@ -169,7 +169,7 @@ function NewContextWithCommandClass(context, command_class){
 	context.on_init_neighbor_site = function(site){
 		site.state = State();
 		if (site.is_slave){
-			var state = context.local_state.state.contents;
+			var state = context.local_site.state.contents;
 			var command = Command.clone_state(state);
 			site.send(command.encode());
 			site.state.command_log.push(command.clone());
