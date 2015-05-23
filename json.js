@@ -163,7 +163,7 @@ function op_set(state, path, value){
 			return;
 		}
 		//trigger "will set"
-		container.value[key] = value;
+		container[key] = value;
 		//trigger "did set"
 	}
 	else if (TypeUtil.is_object(container)){
@@ -235,7 +235,7 @@ function op_splice(state, path, begin, end, values){
 		var length = old_value.length;
 		var test_result = false;
 		test_result = test_result||(begin > length);
-		test_result = test_result||(end > length);
+		test_result = test_result||!(end <= length);
 		test_result = test_result||(begin > end);
 		test_result = test_result||(begin < 0);
 		test_result = test_result||(end < 0);
@@ -839,6 +839,14 @@ function NewContext(context){
 	}
 
 	JSOTC.NewContextWithCommandClass(context, Command);
+
+	context.json_value = function(){
+		return context.local_site.state.contents.root;
+	}
+	context.json_value_at = function(path){
+		var stack = TypeUtil.path_to_stack(context.json_value(), path);
+		return stack.pop();
+	}
 
 	context.request_set = function(path, value){
 		var command = Command();
