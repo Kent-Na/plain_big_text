@@ -85,6 +85,10 @@ var decode_string = function(buffer, offset){
 	return r_value;
 }
 
+/////////
+//command
+//
+
 Command = function(){
 	//Constructor.
 	//Return new command whitch does noting.
@@ -190,11 +194,24 @@ function NewContextWithCommandClass(context, command_class){
 		}
 	}
 
+
+	//Array of received commands while paused execution.
+	//Elements are object{command, sender}.
+	//Commands from disconnected site while paused must be discarded.
+	context.queued_command = [];
+
 	context.execute_command = function(raw_command, sender_site){
 		var i;
 		var command = Command.decode(raw_command);
 		if (! command){
 			//todo print something
+			return;
+		}
+
+		if (context.is_paused){
+			queued_command.push({
+				command:raw_command,
+				sender:sender_site});
 			return;
 		}
 
@@ -258,7 +275,33 @@ function NewContextWithCommandClass(context, command_class){
 		}
 	}
 
+	//Pause executing received command.
+	context.is_paused = false;
+	context.pause_execute_command = function(){
+		context.is_paused = true;	
+	}
+	context.unpause_execute_command = function(){
+		//Unpouse first so execute command method actualy execute command.
+		//Otherwise, it will just requeue commands and make code below
+		//infinity loop.
+		context.is_paused = false;	
+
+		//Execute received command while poused.
+		var i;
+		for (i = 0; i<context.queued_command.length; i++){
+			var command = queued_command[i];
+			if (! queued_command.sender.is_alive()){
+				continue;
+			}
+			context.execute_command(command.command, command.sender);
+		}
+	}
+
 	context.request_execute_command = function(command){
+		if (context.is_paused){
+			//request while paused are ignored.
+			return;
+		}
 		context.execute_command(command.encode(), context.local_site);
 	}
 
@@ -269,6 +312,7 @@ function NewContextWithCommandClass(context, command_class){
 		command.diff = diff;
 
 	}
+
 	return context;
 }
 
