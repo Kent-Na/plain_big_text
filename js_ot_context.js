@@ -229,8 +229,8 @@ function NewContextWithCommandClass(context, command_class){
 		}
 
 		//update lifter
-		for (var idx in context.neighbors){
-			var neighbor = context.neighbors[idx];
+		for (i = 0; i<context.neighbors.length; i++){
+			var neighbor = context.neighbors[i];
 			if (neighbor == sender_site)
 				continue;
 			var cloned = command.clone();
@@ -244,8 +244,8 @@ function NewContextWithCommandClass(context, command_class){
 		//use it when send command.
 		sender_site.state.revision+=1;
 
-		for (var idx in context.neighbors){
-			var neighbor = context.neighbors[idx];
+		for (i = 0; i<context.neighbors.length; i++){
+			var neighbor = context.neighbors[i];
 			if (neighbor == sender_site){
 				continue;
 			}
