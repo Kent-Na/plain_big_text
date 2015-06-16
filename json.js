@@ -873,6 +873,25 @@ function NewContext(context){
 
 		context.request_execute_command(command);
 	}
+	
+	context.store = function(){
+		var text_encoder = new TextEncoder("utf8");
+		var json_value = JSON.stringify(context.json_value());
+		return text_encoder.encode(json_value).buffer;
+	}
+	context.load = function(data){
+		var data_copy = new ArrayBuffer(data.byteLength);
+		JSOTC.memcpy_ArrayBuffer(data, 0, data.byteLength,
+				data_copy, 0);
+		var text_decoder = new TextDecoder("utf8");
+		var json_string = text_decoder.decode(data_copy);
+		var json_value = JSON.parse(json_string);
+		
+		context.request_set([], json_value);
+	}
+
+	//context.request_set([], {"test":"test"});
+
 
 	return context;	
 }
